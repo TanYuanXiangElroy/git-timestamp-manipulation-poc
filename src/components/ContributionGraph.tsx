@@ -15,6 +15,12 @@ import {
 import { generateScript } from "@/utils/generateScript";
 import { fetchContributions } from "@/app/actions";
 
+import { getTextCoordinates } from "@/utils/letters";
+import { addDays, addWeeks } from "date-fns"; 
+
+
+
+
 // GitHub's Color Palette 
 const LEVELS = [
   "bg-[#ebedf0]", // 0: None (Gray)
@@ -49,6 +55,10 @@ export default function ContributionGraph() {
   const [brush, setBrush] = useState(4);
   const [isLoading, setIsLoading] = useState(false);
   const [showWarning, setShowWarning] = useState(false); // State for showing the warning modal
+
+  const [patternMode, setPatternMode] = useState(""); // "" | "text" | "random"
+  const [textInput, setTextInput] = useState("ELROY");
+  const [textOffset, setTextOffset] = useState(2);
 
   // Generate calendar data
   const calendarData = useMemo(() => {
@@ -151,6 +161,43 @@ export default function ContributionGraph() {
     return LEVELS[finalLevel];
   };
 
+  const drawPattern = (type: string) => {
+    const newContribs = { ...contributions }; // Keep existing or start fresh? Let's overlay.
+    
+    calendarData.flat().forEach((day, index) => {
+      if (!day || day.getFullYear() !== selectedYear) return;
+      const dateStr = format(day, "yyyy-MM-dd");
+
+      if (type === "checkerboard") {
+        if (index % 2 === 0) newContribs[dateStr] = 4;
+      }
+      if (type === "invert") {
+        // If empty, make it full. If full, make it empty.
+        const current = newContribs[dateStr] || 0;
+        newContribs[dateStr] = current > 0 ? 0 : 4;
+      }
+    });
+    setContributions(newContribs);
+  };
+
+  const drawText = () => {
+    const startOfGraph = startOfWeek(startOfYear(new Date(selectedYear, 0, 1)), { weekStartsOn: 0 });
+    const coords = getTextCoordinates(textInput, startOfGraph);
+    
+    const newContribs = { ...contributions };
+    
+    coords.forEach(({ x, y }) => {
+      // x + textOffset shifts the text horizontally
+      const targetDate = addDays(addWeeks(startOfGraph, x + Number(textOffset)), y);
+      
+      if (targetDate.getFullYear() === selectedYear) {
+        newContribs[format(targetDate, "yyyy-MM-dd")] = 4;
+      }
+    });
+    
+    setContributions(newContribs);
+  };
+
   return (
     <div className="flex flex-col items-center w-full max-w-[1200px] mx-auto p-4">
       
@@ -225,20 +272,57 @@ export default function ContributionGraph() {
         {/* RIGHT SIDE: Patterns, Download, Auth */}
         <div className="flex items-center gap-3 ml-auto">
           
-          {/* Pattern Select */}
-          <select 
-            defaultValue="" 
-            className="border border-gray-300 rounded px-3 py-2 text-xs bg-gray-50 outline-none cursor-pointer hover:bg-gray-50"
-            onChange={(e) => {
-              if (e.target.value === "random-noise") {
-                generateRandomNoise();
-                e.target.value = "";
-              }
-            }}
-          >
-            <option value="" disabled>Patterns</option>
-            <option value="random-noise">Random Noise</option>
-          </select>
+          {/* Pattern / Text Control */}
+          <div className="flex items-center gap-2">
+            <select 
+              value={patternMode}
+              className="border border-gray-300 rounded px-3 py-2 text-xs bg-gray-50 outline-none cursor-pointer hover:bg-gray-50"
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "random-noise") {
+                  generateRandomNoise();
+                  setPatternMode(""); // Reset after generating
+                } else {
+                  setPatternMode(val); // Keep selected for Text Tool
+                }
+              }}
+            >
+              <option value="" disabled>Tools</option>
+              <option value="text">Text Tool</option>
+              <option value="random-noise">Random Noise</option>
+            </select>
+
+            {/* TEXT TOOL UI */}
+            {patternMode === "text" && (
+              <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-4 duration-300 bg-gray-50 p-1 rounded-lg border border-gray-200">
+                <input 
+                  type="text" 
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value.toUpperCase())}
+                  className="w-20 border border-gray-300 rounded px-2 py-1.5 text-xs outline-none focus:border-green-500 uppercase"
+                  placeholder="TEXT"
+                  maxLength={10}
+                />
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-gray-500 font-medium pl-1">Start Week:</span>
+                  <input 
+                    type="number" 
+                    value={textOffset}
+                    onChange={(e) => setTextOffset(Number(e.target.value))}
+                    className="w-10 border border-gray-300 rounded px-1 py-1.5 text-xs outline-none focus:border-green-500"
+                    min={0}
+                    max={52}
+                  />
+                </div>
+                <button 
+                  onClick={drawText}
+                  className="bg-green-600 text-white px-2 py-1.5 rounded text-xs hover:bg-green-700 ml-1 font-medium"
+                >
+                  Draw
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Download Button */}
           <button
