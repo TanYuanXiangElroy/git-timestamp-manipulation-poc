@@ -48,6 +48,7 @@ export default function ContributionGraph() {
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [brush, setBrush] = useState(4);
   const [isLoading, setIsLoading] = useState(false);
+  const [showWarning, setShowWarning] = useState(false); // State for showing the warning modal
 
   // Generate calendar data
   const calendarData = useMemo(() => {
@@ -70,8 +71,7 @@ export default function ContributionGraph() {
     return weeks;
   }, [selectedYear]);
 
-  const handleDownload = () => {
-    // Pass baseline and maxCommits to generator
+  const confirmDownload = () => {
     const scriptContent = generateScript(contributions, baseline, maxCommits);
     
     const blob = new Blob([scriptContent], { type: "text/x-sh" });
@@ -82,6 +82,11 @@ export default function ContributionGraph() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setShowWarning(false); // Close modal after download
+  };
+
+  const handleDownload = () => {
+    setShowWarning(true);
   };
 
   const handleImport = async () => {
@@ -364,6 +369,53 @@ export default function ContributionGraph() {
           </div>
         </div>
       </div>
+      {showWarning && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-100">
+            <div className="flex items-center gap-3 text-amber-500 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-8 h-8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <h3 className="text-xl font-bold text-gray-900">Safety Warning</h3>
+            </div>
+            
+            <div className="space-y-3 text-sm text-gray-600 mb-6">
+              <p className="font-medium text-gray-900">
+                This script generates fake git commits. Please read carefully:
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  <strong>Do NOT</strong> run this inside a real project (like your work repo). It will mess up your history.
+                </li>
+                <li>
+                  Create a <strong>new, empty repository</strong> to run this script.
+                </li>
+                <li>
+                  Commits made to <strong>future dates</strong> will not appear on your graph until that date arrives.
+                </li>
+                <li>
+                  You can <strong>delete the repository</strong> to undo these changes at any time.
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowWarning(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDownload}
+                className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow-md transition-colors"
+              >
+                I understand, Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
