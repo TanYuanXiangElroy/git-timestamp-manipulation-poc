@@ -1,4 +1,3 @@
-// src/components/ContributionGraph.tsx
 "use client";
 
 import { signIn, signOut, useSession } from "next-auth/react";
@@ -25,12 +24,27 @@ const LEVELS = [
   "bg-[#216e39]", // 4: Heavy Green
 ];
 
+// Helper to determine color level based on raw count and max ceiling
+const getLevelFromCount = (count: number, max: number) => {
+  if (count === 0) return 0;
+  const ceiling = Math.max(max, 10);
+  
+  if (count >= ceiling) return 4;
+  if (count >= Math.ceil(ceiling * 0.50)) return 3;
+  if (count >= Math.ceil(ceiling * 0.25)) return 2;
+  return 1;
+};
+
 export default function ContributionGraph() {
   const { data: session } = useSession();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [isYearOpen, setIsYearOpen] = useState(false);
+  
   const [contributions, setContributions] = useState<Record<string, number>>({});
+  const [baseline, setBaseline] = useState<Record<string, number>>({}); // Raw counts
+  const [maxCommits, setMaxCommits] = useState(0); // Max commit count for scaling
+
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [brush, setBrush] = useState(4);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,10 +53,8 @@ export default function ContributionGraph() {
   const calendarData = useMemo(() => {
     const yearStart = startOfYear(new Date(selectedYear, 0, 1));
     const yearEnd = endOfYear(new Date(selectedYear, 0, 1));
-    
-    const calendarStart = startOfWeek(yearStart, { weekStartsOn: 0 }); // Sunday start
+    const calendarStart = startOfWeek(yearStart, { weekStartsOn: 0 }); 
     const calendarEnd = endOfWeek(yearEnd, { weekStartsOn: 0 });
-
     const allDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
     const weeks: (Date | null)[][] = [];
@@ -55,26 +67,20 @@ export default function ContributionGraph() {
         currentWeek = [];
       }
     });
-
     return weeks;
   }, [selectedYear]);
 
   const handleDownload = () => {
-    // 1. Generate the script string
-    const scriptContent = generateScript(contributions);
+    // Pass baseline and maxCommits to generator
+    const scriptContent = generateScript(contributions, baseline, maxCommits);
     
-    // 2. Create a Blob (a virtual file)
     const blob = new Blob([scriptContent], { type: "text/x-sh" });
-    
-    // 3. Create a fake download link and click it
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "git-art.sh"; // The filename
+    link.download = "git-art.sh";
     document.body.appendChild(link);
     link.click();
-    
-    // 4. Cleanup
     document.body.removeChild(link);
   };
 
@@ -82,8 +88,17 @@ export default function ContributionGraph() {
     if (!session) return;
     setIsLoading(true);
     try {
-      const data = await fetchContributions(selectedYear);
-      setContributions(data);
+      // Destructure data AND max
+      const { data, max } = await fetchContributions(selectedYear);
+      setBaseline(data);
+      setMaxCommits(max);
+      
+      // Calculate initial visual state
+      const visualLevels: Record<string, number> = {};
+      Object.entries(data).forEach(([date, count]) => {
+         visualLevels[date] = getLevelFromCount(count, max);
+      });
+      setContributions(visualLevels);
     } catch (error) {
       console.error("Failed to import:", error);
       alert("Failed to import GitHub data. Make sure you are logged in.");
@@ -94,13 +109,15 @@ export default function ContributionGraph() {
 
   const generateRandomNoise = () => {
     const newContributions: Record<string, number> = {};
-    calendarData.flat().forEach(day => {
-      if (day && day.getFullYear() === selectedYear) {
-        const dateStr = format(day, "yyyy-MM-dd");
-        if (Math.random() > 0.6) { // Only fill 40% of cells for noise look
-             newContributions[dateStr] = Math.ceil(Math.random() * 4); 
+    calendarData.forEach((week) => {
+      week.forEach((day) => {
+        if (day && day.getFullYear() === selectedYear) {
+          const dateStr = format(day, "yyyy-MM-dd");
+          if (Math.random() > 0.6) {
+            newContributions[dateStr] = Math.ceil(Math.random() * 4);
+          }
         }
-      }
+      });
     });
     setContributions(newContributions);
   };
@@ -115,8 +132,18 @@ export default function ContributionGraph() {
   const getColor = (day: Date) => {
     const dateStr = format(day, "yyyy-MM-dd");
     if (day.getFullYear() !== selectedYear) return "bg-transparent pointer-events-none"; 
-    const level = contributions[dateStr] || 0;
-    return LEVELS[level];
+    
+    // 1. Get what user wants to paint
+    const paintedLevel = contributions[dateStr] || 0;
+
+    // 2. Get what really exists (and convert to level)
+    const realCount = baseline[dateStr] || 0;
+    const realLevel = getLevelFromCount(realCount, maxCommits);
+
+    // 3. Show the HIGHER of the two. (Cannot erase history)
+    const finalLevel = Math.max(paintedLevel, realLevel);
+
+    return LEVELS[finalLevel];
   };
 
   return (
@@ -270,37 +297,31 @@ export default function ContributionGraph() {
         </div>
       </div>
 
-      {/* --- The Graph Container (UNCHANGED BELOW) --- */}
+      {/* --- The Graph Container --- */}
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200 select-none overflow-x-auto w-full flex justify-center">
         <div className="flex gap-2">
           
-          {/* 1. Day Labels Column (Fixed Width) */}
-          {/* We use the exact same grid logic (h-11px + gap-2px) to align text */}
+          {/* 1. Day Labels Column */}
           <div className="flex flex-col gap-[2px] pt-5 text-[10px] text-gray-400 font-medium text-right pr-1">
-            <div className="h-[11px]"></div> {/* Sun */}
+            <div className="h-[11px]"></div>
             <div className="h-[11px] leading-[11px]">Mon</div>
-            <div className="h-[11px]"></div> {/* Tue */}
+            <div className="h-[11px]"></div>
             <div className="h-[11px] leading-[11px]">Wed</div>
-            <div className="h-[11px]"></div> {/* Thu */}
+            <div className="h-[11px]"></div>
             <div className="h-[11px] leading-[11px]">Fri</div>
-            <div className="h-[11px]"></div> {/* Sat */}
+            <div className="h-[11px]"></div>
           </div>
 
           {/* 2. The Main Grid Area */}
           <div className="flex gap-[2px]">
             {calendarData.map((week, wIndex) => {
-              // Month Label Logic
               const firstDay = week[0];
               const prevWeekFirstDay = calendarData[wIndex - 1]?.[0];
               
-              // Show label if month changes, or if it's the first week of the year
               let showMonthLabel = false;
               if (firstDay && firstDay.getFullYear() === selectedYear) {
-                 if (wIndex === 0) {
-                    showMonthLabel = true;
-                 } else if (prevWeekFirstDay && getMonth(firstDay) !== getMonth(prevWeekFirstDay)) {
-                    showMonthLabel = true;
-                 }
+                 if (wIndex === 0) showMonthLabel = true;
+                 else if (prevWeekFirstDay && getMonth(firstDay) !== getMonth(prevWeekFirstDay)) showMonthLabel = true;
               }
 
               return (

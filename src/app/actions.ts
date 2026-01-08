@@ -8,9 +8,9 @@ export async function fetchContributions(year: number) {
   // 1. Get the session (Current Logged In User)
   const session = await getServerSession(authOptions);
 
-  // @ts-expect-error
+  // @ts-expect-error: session typing
   const token = session?.accessToken;
-  // @ts-expect-error
+  // @ts-expect-error: session typing
   const username = session?.user?.login;
 
   if (!token || !username) {
@@ -28,7 +28,7 @@ export async function fetchContributions(year: number) {
             weeks {
               contributionDays {
                 date
-                contributionLevel
+                contributionCount
               }
             }
           }
@@ -57,26 +57,26 @@ export async function fetchContributions(year: number) {
     throw new Error(json.errors[0].message);
   }
 
-  // --- Same mapping logic as before ---
-  const levelMap: Record<string, number> = {
-    NONE: 0,
-    FIRST_QUARTILE: 1,
-    SECOND_QUARTILE: 2,
-    THIRD_QUARTILE: 3,
-    FOURTH_QUARTILE: 4,
-  };
-
+  // Store RAW COUNTS
   const contributionMap: Record<string, number> = {};
+  let maxCount = 0; // Track the highest number of commits found
+
   const weeks = json.data.user.contributionsCollection.contributionCalendar.weeks;
   
-  type Day = { date: string; contributionLevel: string };
-  type Week = { contributionDays: Day[] };
-
-  weeks.forEach((week: Week) => {
-    week.contributionDays.forEach((day: Day) => {
-      contributionMap[day.date] = levelMap[day.contributionLevel] || 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  weeks.forEach((week: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    week.contributionDays.forEach((day: any) => {
+      contributionMap[day.date] = day.contributionCount;
+      if (day.contributionCount > maxCount) {
+        maxCount = day.contributionCount;
+      }
     });
   });
 
-  return contributionMap;
+  // Return BOTH the map and the max
+  return {
+    data: contributionMap,
+    max: maxCount
+  };
 }
