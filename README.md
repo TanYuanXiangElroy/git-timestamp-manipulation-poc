@@ -1,58 +1,66 @@
-# Git Contribution Hack
+# Git Timestamp Manipulation (PoC)
 
-![Next.js](https://img.shields.io/badge/Next.js-15-black) ![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![License](https://img.shields.io/badge/License-MIT-green)
+![Next.js](https://img.shields.io/badge/Next.js-15-black) ![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38bdf8) ![Security Research](https://img.shields.io/badge/Focus-Security%20Research-red) ![License](https://img.shields.io/badge/License-MIT-green)
 
-**Design your GitHub contribution graph. Draw pixel art, write text, or fake a streak.**
+**A Proof-of-Concept tool demonstrating the mutability of Git commit metadata and the unreliability of contribution metrics.**
 
 [**Live Demo**](https://git-contribution-hack.vercel.app/) 
 
 ![Demo of the Tool](public/assets/screenshot-hero.png)
 
-## 💡 Inspiration & The "Why"
-
-This project was inspired by **[Fenrir YouTube video](https://youtu.be/LlkcvvGbs9I?si=NcSFxcDigy60thlU)** on hacking the git serise.
-
-**Why I built this:**
-When I looked for tools to customize the contribution graph, most were simple Command Line Interfaces (CLI) or Python scripts. 
-
-They had major limitations:
-1.  **"Blind" Editing:** You couldn't see what the result would look like until you pushed code.
-2.  **No History:** You couldn't see your *existing* commits, meaning you might accidentally overwrite or mess up your actual work history.
-3.  **Poor UX:** There was no easy way to type text or drag-and-drop patterns.
-
-If they had UI it was pretty bad if it was good it was under a paywall
-
-**Git Contribution Hack** solves this by providing a reactive, visual UI that imports your actual data and lets you design around it.
+> **⚠️ DISCLAIMER: Educational Proof-of-Concept**
+>
+> This project demonstrates how Git commit timestamps are mutable client-side data and how contribution metrics can be easily spoofed. 
+>
+> **The intent of this project is to highlight why contribution graphs should NOT be used as a primary metric for developer evaluation or trust.**
+> 
+> This tool should only be used on private, disposable test repositories for educational purposes.
 
 
-## Features
+## The Security Concept: Why this works
 
-*   **Visual Editor:** Click and drag to paint your commit history (0-4 intensity).
-*   **Import History:** Log in with GitHub to see your *real* graph and paint around existing commits you also can't pain a lower colour than what is already imported.
-*   **Text Tool:** Type text like "HELLO" or use Emojis (`:)`, `😊`) to generate pixel art instantly.
-*   **Script Export:** Generates a safe bash script (`.sh`) to create the commits locally.
+Many platforms (including GitHub) rely on the `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` environment variables to populate contribution graphs. 
+
+This project proves that without strict verification methods (like GPG signing or server-side timestamping), **Git history is not an immutable timeline of work.**
+
+### Security Implications Demonstrated:
+1.  **Metric Spoofing:** Shows how "Vanity Metrics" (green squares) can be generated programmatically without actual code contribution.
+2.  **Trust Assumptions:** Highlights potential vulnerabilities in supply chain security. If a bad actor can backdate commits, they could potentially hide malicious code insertions within a timeline that appears "dormant" or "legacy."
+3.  **Metadata Mutability:** Demonstrates that Git creates a graph of content, not a verified timeline of events.
+
+## 🛠️ Technical Implementation
+
+This application provides a visual interface to generate a batch script that exploits Git's environment variables to inject a specific pattern into the commit history.
+
+### Core Features
+*   **Visual State Management:** A React-based grid (53x7) to define the desired commit density state.
+*   **Dynamic Scaling Algorithm:** Uses a "Differential Mode" to calculate commit deltas based on existing user history (via GraphQL API), ensuring the injected pattern scales relative to the user's actual activity.
+*   **Batch Script Generation:** Programmatically generates a Bash script to execute `git commit --allow-empty` loop, injecting `GIT_AUTHOR_DATE` for specific timestamps.
+*   **NextAuth Integration:** Authenticates with GitHub to fetch and overlay real contribution data (via GraphQL) to visualize the manipulation against a real-world baseline.
 
 ---
 
-## 📸 Screenshots
+## 📸 Visualization
 
 ### The Editor
-![Editor View](public/assets/screenshot-demo.png)
+![Screenshot of the tool demonstrating pattern injection](public/assets/screenshot-demo.png)
 
 ---
 
-##  How to Use
+##  Usage (Strictly for Research/Testing)
 
-### 1. Design Your Graph
+This tool generates a shell script (`.sh`) to be run locally.
+
+### 1. Configuration
 Go to the website, select the year, and start painting. You can use the **Text Tool** to write messages or the **Brush** to draw manually.
 
 ### 2. Export the Script
 Click **Download Script**. You will get a file named `git-art.sh`.
 
-### 3. Run it Safely (The "Disposable Repo" Method)
+### 3. Run it Safely (The "Disposable Repo"/Sandboxed Environment)
 **⚠️ WARNING:** Do not run this inside your actual work or project repositories. It generates hundreds of empty commits.
 
-1.  Create a **New, Empty Repository** on GitHub (e.g., `my-art-repo`).
+1.  Create a **New, Empty Repository** on GitHub (e.g., `my-git-test-repo`).
 2.  Create a new folder on your computer and move the script there.
 3.  Open your terminal in that folder.
 
@@ -131,45 +139,10 @@ To allow the "Connect GitHub" button to work locally, you need to register a dev
 ```Bash
 npm run dev
 ```
-### 👾 How to Add New Icons/Emojis
-The text tool relies on a bitmap dictionary. You can easily add new icons like an Alien (👾).
 
-1. Open src/utils/letters.ts.
-2. Find the ALPHABET object.
-3. Add your new character. The logic is based on Columns (Vertical).
-    - 1 = Pixel On (Green)
-    - 0 = Pixel Off (Empty)
+#  Disclaimer
+This software is open source under the MIT License.
 
-**Example: Adding an Alien**
-
-```typescript
-// In src/utils/letters.ts
-  
-  "👾": [
-    [0,0,1,0,0], // Column 1 (Left Antenna)
-    [0,1,1,1,0], // Column 2
-    [1,1,0,1,1], // Column 3 (Middle/Eyes)
-    [0,1,1,1,0], // Column 4
-    [0,0,1,0,0], // Column 5 (Right Antenna)
-  ],
-```
-p.s. If you want to map a symbol (like !) to this icon, update the ALIASES object at the bottom of the file.
-
-## Future Roadmap / To-Do
-
-Here are some stuff I would love help on or will slowly add this when I have more bandwidth/remember
-
-- [ ] **More Patterns**: Examples would be "Checkerboard", "Waves", etc.
-
-- [ ] **Dark Mode**: Support system dark mode for the UI.
-
-- [ ] **Advanced Text Styling:** Allow users to select the specific brush intensity (Level 1-4) for text/emojis, instead of defaulting to dark green.
-- [ ] **Texture Fills:** Add patterns *inside* the text/icons (e.g., Camouflage, Gradients, or Noise) so they aren't just solid blocks of color.
-
-- [ ] **Direct Integration**: Use GitHub API to push commits directly without downloading a script (requires background jobs). [How to make it free/cheap and at a quick time would be a challange]
-
-
-# ⚠️ Disclaimer
 
 * This tool is for **educational** and *aesthetic* purposes only.
 * Do not use this to deceive employers or lie about your work history.
@@ -178,4 +151,3 @@ Here are some stuff I would love help on or will slowly add this when I have mor
 **Always use a private, disposable repository.**
 
 
-Built using Next.js, Tailwind CSS, GitHub GraphQL API and AI 😉.
